@@ -1,19 +1,52 @@
+name: snapshot
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # запуск кожні 30 хв (UTC)
+  workflow_dispatch:         # ручний запуск з кнопки Run workflow
+
+permissions:
+  contents: write            # потрібні права для коміту/пушу
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps (optional)
+        run: |
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            echo "No requirements.txt — skipping."
+          fi
+
+      - name: Update data (create snapshot file)
+        run: python scripts/update.py
+
       - name: Commit if changed (diff-guard) as YOU
         env:
           GIT_AUTHOR_NAME: "CryptoAndy8"
           GIT_AUTHOR_EMAIL: "96211146+CryptoAndy8@users.noreply.github.com"
           GIT_COMMITTER_NAME: "CryptoAndy8"
           GIT_COMMITTER_EMAIL: "96211146+CryptoAndy8@users.noreply.github.com"
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}   # секрет у Settings → Secrets → Actions
         run: |
           echo "[workflow] git status BEFORE:"; git status --porcelain || true
 
-          # 1) Додаємо ВСЕ (включно з untracked)
+          # Додаємо УСЕ (включно з untracked)
           git add -A
-
           echo "[workflow] git status AFTER add:"; git status --porcelain || true
 
-          # 2) Перевіряємо staged-диф (враховує нові файли)
+          # Перевіряємо staged-диф (враховує нові файли)
           if git diff --cached --quiet; then
             echo "[workflow] No staged changes — skip commit."
           else

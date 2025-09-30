@@ -1,13 +1,17 @@
 name: snapshot
+
 on:
   schedule:
-    - cron: "*/30 * * * *"   # кожні 30 хв (UTC)
-  workflow_dispatch:         # ручний запуск
+    - cron: "*/30 * * * *"   # запуск кожні 30 хв (UTC)
+  workflow_dispatch:         # дозволяє ручний запуск з кнопки Run workflow
+
 permissions:
-  contents: write
+  contents: write            # потрібні права, щоб робити коміт і пуш
+
 jobs:
   run:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -18,23 +22,37 @@ jobs:
           python-version: "3.11"
 
       - name: Install deps (optional)
-        run: pip install -r requirements.txt || true
+        run: |
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            echo "No requirements.txt — skipping."
+          fi
 
       - name: Update data (create snapshot file)
         run: python scripts/update.py
 
       - name: Commit if changed (diff-guard) as YOU
         env:
+          # ⚠️ Замінено на твої дані (no-reply email, щоб не світився реальний)
           GIT_AUTHOR_NAME: "CryptoAndy8"
           GIT_AUTHOR_EMAIL: "96211146+CryptoAndy8@users.noreply.github.com"
           GIT_COMMITTER_NAME: "CryptoAndy8"
           GIT_COMMITTER_EMAIL: "96211146+CryptoAndy8@users.noreply.github.com"
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}  # секрет із Settings → Secrets → Actions
         run: |
+          echo "[workflow] git status BEFORE:"
+          git status --porcelain || true
+
+          # Якщо є будь-які зміни у робочому дереві — комітимо і пушимо
           if ! git diff --quiet; then
             git add -A
-            git commit -m "snapshot: $(date -u +"%Y-%m-%d %H:%MZ")"
-            git push https://$GH_TOKEN@github.com/${{ github.repository }}.git HEAD:${{ github.ref_name }}
+            echo "[workflow] git status AFTER add:"
+            git status --porcelain || true
+
+            git commit -m "snapshot: $(date -u +"%Y-%m-%d %H:%M:%SZ")"
+            git push "https://$GH_TOKEN@github.com/${{ github.repository }}.git" "HEAD:${{ github.ref_name }}"
+            echo "[workflow] push DONE"
           else
-            echo "No changes — skip commit."
+            echo "[workflow] No changes — skip commit."
           fi

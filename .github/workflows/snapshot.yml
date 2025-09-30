@@ -1,0 +1,43 @@
+name: snapshot
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # запуск кожні 30 хв (UTC)
+  workflow_dispatch:         # ручний запуск з вкладки Actions
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps (optional)
+        run: pip install -r requirements.txt || true
+
+      - name: Update data (create snapshot file)
+        run: python scripts/update.py
+
+      - name: Commit if changed (diff-guard) as YOU
+        env:
+          # Використовуємо no-reply email, щоб не світити реальний
+          GIT_AUTHOR_NAME: YOUR_NAME
+          GIT_AUTHOR_EMAIL: YOUR_ID+YOUR_LOGIN@users.noreply.github.com
+          GIT_COMMITTER_NAME: YOUR_NAME
+          GIT_COMMITTER_EMAIL: YOUR_ID+YOUR_LOGIN@users.noreply.github.com
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          # Якщо є зміни у робочому дереві — комітимо
+          if ! git diff --quiet; then
+            git add -A
+            git commit -m "snapshot: $(date -u +"%Y-%m-%d %H:%MZ")"
+            # Пушимо через твій PAT, щоб коміт зарахувався тобі (не боту)
+            git push https://$GH_TOKEN@github.com/${{ github.repository }}.git HEAD:${{ github.ref_name }}
+          else
+            echo "No changes — skip commit."
+          fi
